@@ -1,0 +1,123 @@
+###############Windthrow causes declines in carbohydrate and phenolic concentrations and increased monoterpene emission in Norway spruce#####
+###############Authors: Linda M. A. Lehmanski, Lara M. Kösters, Jianbei Huang, Martin Göbel, Jonathan Gershenzon, Henrik Hartmann############
+
+
+#######Statistical analysis#######################
+#####Non-structural carbohydrates, sugars (vitality)######
+data <- read.csv("nsc_data_file.csv", header = TRUE, sep = ";", dec = ",")
+subs <- c('ss.glucose.mg.l', 'ss.sucrose.mg.l', 'ss.fructose.mg.l', 'ss.total')
+data [subs] <- lapply(data [subs], gsub, pattern = ",", replacement= ".")
+data [subs] <- sapply(data [subs], as.numeric)
+data <- filter(data, id.original < 49)
+
+##Shapiro-wilk test to check for normal distribution
+shapiro.test(data$ss.total)
+
+###Levene test to check if variances of groups differ####
+leveneTest(data$ss.total, data$tree_treatment)
+
+###non-paired t-test, change date = to change sampling date#####
+date1 = filter(data, sampling_date == '29.06.2022')
+
+####add sugar you want to look at at first position
+t.test(ss.sucrose.mg.l ~ tree_treatment , data = date1, var.equal = TRUE)
+t.test(ss.fructose.mg.l ~ tree_treatment , data = date1, var.equal = TRUE)
+t.test(ss.glucose.mg.l ~ tree_treatment , data = date1, var.equal = TRUE)
+t.test(ss.total~ tree_treatment , data = date1, var.equal = TRUE)
+
+
+
+####Phenols (defence capacity)###################
+library(dplyr)
+library(ggpubr)
+library(ggplot2)
+library(tidyverse)
+library(plyr)
+
+data <- read.csv('Phenolics_data.csv', header = TRUE, sep = ";", dec = ".")
+subs <- c('Astringin','Catechin', 'Isorhapontin', 'PB1', 'Taxifolin','Tax_glucoside' )
+data [subs] <- lapply(data [subs], gsub, pattern = ",", replacement= ".")
+data [subs] <- sapply(data [subs], as.numeric)
+data$Total_Phenols = rowSums(data[ , c(16:21)], na.rm=TRUE)
+
+##Shapiro-wilk test to check for normal distribution
+shapiro.test(data$Total_Phenols) ###sum of all phenols
+
+###Levene test to check if variances of groups differ####
+library(car)
+leveneTest(data$Total_Phenols, data$tree.treatment)
+
+####Wolcoxon rank sum test#####
+data1 <- data %>% pivot_longer( cols = c('Astringin','Catechin', 'Isorhapontin', 'PB1', 
+                                         'Taxifolin','Tax_glucoside', 'Total_Phenols'),
+                                names_to = 'Phenols',
+                                values_to = 'concentration')
+data1 = data1 %>%
+  group_by(tree.treatment, Phenols, sampling.date) %>%
+  summarise_at(vars(concentration), list(mean = mean, sd = sd))
+###fill in '' after Phenols== the substance you want to test for both treatments 
+data_comp <- data1[data1$Phenols == 'Astringin', ]
+####if specific date: change date, if general, leave out this line####
+spec = filter(data_comp, sampling.date == '29.06.')
+wilcox.test(spec$mean ~ spec$tree.treatment, data = spec, exact = TRUE, correct = FALSE, conf.int = TRUE)
+wilcox.test(data_comp$norm ~ data_comp$tree.treatment, data = data_comp, exact = TRUE, correct = FALSE, conf.int = TRUE)
+
+
+#####regression sugar and phenols######
+PH <- read.csv('Phenolics_BB_VOC.csv', header = TRUE, sep = ";", dec = ".")
+SS <- read.csv("nsc_data_file.csv", header = TRUE, sep = ";", dec = ",")
+ df_ssph <- merge(SS, PH, by = "tree", all.x = TRUE,
+                   all.y = FALSE)
+
+   # fallen   
+   df_ssph_fallen <- df_ssph[df_ssph$tree.treatment == 'fallen',]
+ hist(df_ssph_fallen$ss.total)
+ g <- glm(ss.total ~ sum, data = df_ssph_fallen, family='gaussian')
+ summary(g)
+ 
+ # standing
+ df_ssph_standing <- df_ssph[df_ssph$tree.treatment == 'standing ',]
+ hist(df_ssph_standing$ss.total)
+ g <- glm(ss.total ~ sum, data = df_ssph_standing, family='gaussian')
+ summary(g)
+
+####Monoterpenes#################################
+
+data <- read.csv('GC_MS.csv', header = TRUE, sep = ";", dec = ".")
+subs <- c("total_conc", "conc_ppm", "temperature", "rel_conc")
+data[subs] <- lapply(data[subs], gsub, pattern = ",", replacement= ".")
+data[subs] <- sapply(data[subs], as.numeric)
+data <- data[!is.na(data$conc_ppm),]
+data = filter(data, compound != 'zeta-fenchene', compound != 'cyclofenchene')
+
+##Shapiro-wilk test to check for normal distribution, >0.05 = normally distributed
+shapiro.test(data$conc_ppm)
+
+###Levene test to check if variances of groups differ####
+library(car)
+leveneTest(data$conc_ppm, data$treatment)
+
+##########Welch-Anova#########
+oneway.test(conc_ppm ~ treatment, data = data_stat, var.equal = FALSE)
+
+
+#####Mann Whitney U test #####                     
+data_comp <- data[data$compound == '3-Carene',]
+wilcox.test(data_comp$norm ~ data_comp$treatment, data = data_comp, exact = TRUE, correct = FALSE, conf.int = TRUE)
+data_comp <- data[data$compound == 'Alpha-Pinene',]
+wilcox.test(data_comp$norm ~ data_comp$treatment, data = data_comp, exact = TRUE, correct = FALSE, conf.int = TRUE)
+data_comp <- data[data$compound == 'Beta-Pinene',]
+wilcox.test(data_comp$norm ~ data_comp$treatment, data = data_comp, exact = TRUE, correct = FALSE, conf.int = TRUE)
+data_comp <- data[data$compound == 'Camphene',]
+wilcox.test(data_comp$norm ~ data_comp$treatment, data = data_comp, exact = TRUE, correct = FALSE, conf.int = TRUE)
+data_comp <- data[data$compound == 'D-Limonene',]
+wilcox.test(data_comp$norm ~ data_comp$treatment, data = data_comp, exact = TRUE, correct = FALSE, conf.int = TRUE)
+
+data_comp <- data[data$compound == '3-Carene',]
+ks.test(data_comp[data_comp$treatment == 'fallen',]$norm, data_comp[data_comp$treatment == 'standing',]$norm)
+
+
+
+
+
+
